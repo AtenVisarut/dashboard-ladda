@@ -26,6 +26,15 @@ interface Stats {
   topIntents: Array<{ intent: string; count: number }>;
   recentEvents: Array<{ event_type: string; question_text: string; response_time_ms: number; created_at: string }>;
   dailySeries: DailySeries[];
+  // Business Insights
+  topRecommendedProducts: Array<{ name: string; count: number }>;
+  topPlants: Array<{ name: string; count: number }>;
+  topProblems: Array<{ name: string; count: number; type: string }>;
+  peakHours: Array<{ hour: string; count: number }>;
+  handoffRate: number;
+  handoffCount: number;
+  avgMessagesPerSession: number;
+  newUsersInPeriod: number;
 }
 
 function StatCard({ icon: Icon, label, value, subtext, color }: {
@@ -80,11 +89,13 @@ export default function DashboardPage() {
       const sinceISO = since.toISOString();
 
       // Parallel queries
-      const [usersRes, eventsRes, productsRes, errorsRes] = await Promise.all([
+      const [usersRes, eventsRes, productsRes, errorsRes, productRecsRes, handoffsRes] = await Promise.all([
         supabase.from("user_ladda(LINE,FACE)").select("line_user_id, display_name, created_at"),
-        supabase.from("ladda_analyst_event").select("event_type, question_text, intent, response_time_ms, created_at").gte("created_at", sinceISO).order("created_at", { ascending: false }).limit(500),
+        supabase.from("ladda_analyst_event").select("event_type, question_text, intent, response_time_ms, created_at, user_id").gte("created_at", sinceISO).order("created_at", { ascending: false }).limit(500),
         supabase.from("products3").select("id", { count: "exact", head: true }),
         supabase.from("ladda_analyst_event").select("id", { count: "exact", head: true }).eq("event_type", "error").gte("created_at", sinceISO),
+        supabase.from("ladda_analyst_event").select("product_name, created_at").eq("event_type", "product_recommendation").gte("created_at", sinceISO),
+        supabase.from("admin_handoffs").select("id", { count: "exact", head: true }).gte("created_at", sinceISO),
       ]);
 
       const users = usersRes.data || [];
@@ -142,6 +153,82 @@ export default function DashboardPage() {
           errors: d.errors,
         }));
 
+      // --- Business Insights ---
+
+      // Top recommended products
+      const productRecs = productRecsRes.data || [];
+      const prodCounts: Record<string, number> = {};
+      productRecs.forEach(r => {
+        const name = (r.product_name || "").split(" (")[0].trim(); // strip "(สารสำคัญ)"
+        if (name) prodCounts[name] = (prodCounts[name] || 0) + 1;
+      });
+      const topRecommendedProducts = Object.entries(prodCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({ name, count }));
+
+      // Top plants mentioned in questions
+      const plantKeywords = ["ทุเรียน","ข้าว","มะม่วง","ส้ม","อ้อย","ข้าวโพด","มันสำปะหลัง","ลำไย","พริก","ยางพารา","ปาล์ม","ผัก"];
+      const plantCounts: Record<string, number> = {};
+      questions.forEach(e => {
+        const q = e.question_text || "";
+        plantKeywords.forEach(p => { if (q.includes(p)) plantCounts[p] = (plantCounts[p] || 0) + 1; });
+      });
+      const topPlants = Object.entries(plantCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, count }));
+
+      // Top problems (diseases/pests) from questions
+      const problemKeywords: Record<string, string> = {
+        "เพลี้ย": "แมลง", "หนอน": "แมลง", "ไร": "แมลง", "แมลง": "แมลง", "ด้วง": "แมลง", "ทริปส์": "แมลง",
+        "ราน้ำค้าง": "โรค", "รากเน่า": "โรค", "ใบไหม้": "โรค", "ใบจุด": "โรค", "แอนแทรคโนส": "โรค", "ราแป้ง": "โรค", "เชื้อรา": "โรค", "ราสนิม": "โรค",
+        "หญ้า": "วัชพืช", "วัชพืช": "วัชพืช",
+        "บำรุง": "บำรุง", "ปุ๋ย": "บำรุง", "ใบอ่อน": "บำรุง", "เร่งดอก": "บำรุง", "ติดผล": "บำรุง",
+      };
+      const problemCounts: Record<string, { count: number; type: string }> = {};
+      questions.forEach(e => {
+        const q = e.question_text || "";
+        Object.entries(problemKeywords).forEach(([kw, type]) => {
+          if (q.includes(kw)) {
+            if (!problemCounts[kw]) problemCounts[kw] = { count: 0, type };
+            problemCounts[kw].count++;
+          }
+        });
+      });
+      const topProblems = Object.entries(problemCounts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10)
+        .map(([name, { count, type }]) => ({ name, count, type }));
+
+      // Peak hours
+      const hourCounts: Record<string, number> = {};
+      questions.forEach(e => {
+        const h = new Date(e.created_at).getHours();
+        const label = `${h.toString().padStart(2, "0")}:00`;
+        hourCounts[label] = (hourCounts[label] || 0) + 1;
+      });
+      const peakHours = Object.entries(hourCounts)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([hour, count]) => ({ hour, count }));
+
+      // Handoff rate
+      const handoffCount = handoffsRes.count || 0;
+      const handoffRate = questions.length > 0 ? Math.round((handoffCount / questions.length) * 100) : 0;
+
+      // Avg messages per user session
+      const userMsgCounts: Record<string, number> = {};
+      events.filter(e => e.user_id).forEach(e => {
+        userMsgCounts[e.user_id] = (userMsgCounts[e.user_id] || 0) + 1;
+      });
+      const sessionCounts = Object.values(userMsgCounts);
+      const avgMessagesPerSession = sessionCounts.length > 0
+        ? Math.round(sessionCounts.reduce((a, b) => a + b, 0) / sessionCounts.length * 10) / 10
+        : 0;
+
+      // New users in period
+      const newUsersInPeriod = users.filter(u => u.created_at >= sinceISO).length;
+
       // Health
       const errorRate = questions.length > 0 ? totalErrors / questions.length : 0;
       const avgMs = avgResponseTime;
@@ -161,6 +248,14 @@ export default function DashboardPage() {
         topIntents,
         recentEvents: events.slice(0, 20),
         dailySeries,
+        topRecommendedProducts,
+        topPlants,
+        topProblems,
+        peakHours,
+        handoffRate,
+        handoffCount,
+        avgMessagesPerSession,
+        newUsersInPeriod,
       });
       setHealth(healthStatus);
     } catch (err) {
@@ -340,6 +435,138 @@ export default function DashboardPage() {
             {(!stats?.topQuestions || stats.topQuestions.length === 0) && (
               <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
             )}
+          </div>
+        </div>
+
+        {/* ============ Business Insights ============ */}
+
+        {/* Row: Product Insights + Crop Trends */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Recommended Products */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">สินค้าที่แนะนำบ่อย</h3>
+            <p className="text-xs text-gray-400 mb-4">สินค้าที่ bot แนะนำให้เกษตรกรมากที่สุด</p>
+            <div className="space-y-2">
+              {(stats?.topRecommendedProducts || []).map((item, i) => {
+                const maxCount = stats?.topRecommendedProducts?.[0]?.count || 1;
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="w-6 h-6 bg-primary-50 text-primary-600 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm text-gray-700 truncate">{item.name}</span>
+                        <span className="text-xs font-medium text-gray-500 ml-2 flex-shrink-0">{item.count} ครั้ง</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div className="bg-primary-400 h-1.5 rounded-full transition-all" style={{ width: `${(item.count / maxCount) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {(!stats?.topRecommendedProducts || stats.topRecommendedProducts.length === 0) && (
+                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
+              )}
+            </div>
+          </div>
+
+          {/* Top Plants */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">พืชที่ถามบ่อย</h3>
+            <p className="text-xs text-gray-400 mb-4">พืชที่เกษตรกรสนใจมากที่สุด</p>
+            <div className="space-y-2">
+              {(stats?.topPlants || []).map((item, i) => {
+                const plantEmoji: Record<string, string> = {
+                  "ทุเรียน": "🍈", "ข้าว": "🌾", "มะม่วง": "🥭", "ส้ม": "🍊",
+                  "อ้อย": "🎋", "ข้าวโพด": "🌽", "มันสำปะหลัง": "🥔", "ลำไย": "🫐",
+                  "พริก": "🌶️", "ยางพารา": "🌳", "ปาล์ม": "🌴", "ผัก": "🥬",
+                };
+                const maxCount = stats?.topPlants?.[0]?.count || 1;
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-xl flex-shrink-0">{plantEmoji[item.name] || "🌱"}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                        <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{item.count} ครั้ง</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div className="bg-green-400 h-1.5 rounded-full transition-all" style={{ width: `${(item.count / maxCount) * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {(!stats?.topPlants || stats.topPlants.length === 0) && (
+                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Row: Problems + Peak Hours */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Problems */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">ปัญหาที่ถามบ่อย</h3>
+            <p className="text-xs text-gray-400 mb-4">โรค แมลง วัชพืช ที่เกษตรกรพบบ่อย</p>
+            <div className="space-y-2">
+              {(stats?.topProblems || []).map((item, i) => {
+                const typeColor: Record<string, string> = {
+                  "แมลง": "bg-red-100 text-red-700",
+                  "โรค": "bg-orange-100 text-orange-700",
+                  "วัชพืช": "bg-green-100 text-green-700",
+                  "บำรุง": "bg-blue-100 text-blue-700",
+                };
+                return (
+                  <div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor[item.type] || "bg-gray-100 text-gray-600"}`}>{item.type}</span>
+                      <span className="text-sm text-gray-700">{item.name}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-500">{item.count}</span>
+                  </div>
+                );
+              })}
+              {(!stats?.topProblems || stats.topProblems.length === 0) && (
+                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
+              )}
+            </div>
+          </div>
+
+          {/* Peak Hours + Engagement Stats */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">ช่วงเวลาที่ใช้งาน</h3>
+            <p className="text-xs text-gray-400 mb-4">จำนวนคำถามแยกตามชั่วโมง</p>
+            <div className="h-40 mb-4">
+              {stats?.peakHours && stats.peakHours.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.peakHours}>
+                    <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#004F9F" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-gray-400 text-center py-12">ยังไม่มีข้อมูล</p>
+              )}
+            </div>
+            {/* Engagement summary */}
+            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-800">{stats?.newUsersInPeriod ?? "-"}</p>
+                <p className="text-xs text-gray-400">user ใหม่</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-800">{stats?.avgMessagesPerSession ?? "-"}</p>
+                <p className="text-xs text-gray-400">msg/session</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-800">{stats?.handoffRate ?? 0}%</p>
+                <p className="text-xs text-gray-400">handoff rate</p>
+              </div>
+            </div>
           </div>
         </div>
 
