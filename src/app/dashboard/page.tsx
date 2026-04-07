@@ -291,17 +291,32 @@ export default function DashboardPage() {
 
           {/* Top Intents */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Intent ยอดนิยม</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">หัวข้อที่ถามบ่อย</h3>
             <div className="space-y-2">
-              {(stats?.topIntents || []).map((item, i) => (
+              {(stats?.topIntents || []).map((item, i) => {
+                const intentLabels: Record<string, { label: string; emoji: string }> = {
+                  product_inquiry: { label: "ถามข้อมูลสินค้า", emoji: "💊" },
+                  product_recommendation: { label: "ขอแนะนำสินค้า", emoji: "🛒" },
+                  disease_treatment: { label: "โรคพืช", emoji: "🦠" },
+                  pest_control: { label: "แมลงศัตรูพืช", emoji: "🐛" },
+                  weed_control: { label: "วัชพืช", emoji: "🌿" },
+                  nutrient_supplement: { label: "บำรุง/ฮอร์โมน", emoji: "🌱" },
+                  usage_instruction: { label: "วิธีใช้/อัตราผสม", emoji: "📋" },
+                  general_agriculture: { label: "เกษตรทั่วไป", emoji: "🌾" },
+                  greeting: { label: "ทักทาย", emoji: "👋" },
+                  unknown: { label: "อื่นๆ", emoji: "❓" },
+                };
+                const mapped = intentLabels[item.intent] || { label: item.intent, emoji: "📌" };
+                return (
                 <div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
                   <div className="flex items-center gap-3">
                     <span className="w-7 h-7 bg-primary-50 text-primary-500 rounded-lg flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                    <span className="text-sm text-gray-700">{item.intent}</span>
+                    <span className="text-sm text-gray-700">{mapped.emoji} {mapped.label}</span>
                   </div>
                   <span className="text-sm font-medium text-gray-500">{item.count}</span>
                 </div>
-              ))}
+                );
+              })}
               {(!stats?.topIntents || stats.topIntents.length === 0) && (
                 <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
               )}
