@@ -155,11 +155,11 @@ export default function DashboardPage() {
 
       // --- Business Insights ---
 
-      // Top recommended products
+      // Top recommended products (from DB product_name column — no hardcode)
       const productRecs = productRecsRes.data || [];
       const prodCounts: Record<string, number> = {};
       productRecs.forEach(r => {
-        const name = (r.product_name || "").split(" (")[0].trim(); // strip "(สารสำคัญ)"
+        const name = (r.product_name || "").split(" (")[0].trim();
         if (name) prodCounts[name] = (prodCounts[name] || 0) + 1;
       });
       const topRecommendedProducts = Object.entries(prodCounts)
@@ -167,39 +167,54 @@ export default function DashboardPage() {
         .slice(0, 10)
         .map(([name, count]) => ({ name, count }));
 
-      // Top plants mentioned in questions
-      const plantKeywords = ["ทุเรียน","ข้าว","มะม่วง","ส้ม","อ้อย","ข้าวโพด","มันสำปะหลัง","ลำไย","พริก","ยางพารา","ปาล์ม","ผัก"];
-      const plantCounts: Record<string, number> = {};
-      questions.forEach(e => {
-        const q = e.question_text || "";
-        plantKeywords.forEach(p => { if (q.includes(p)) plantCounts[p] = (plantCounts[p] || 0) + 1; });
-      });
-      const topPlants = Object.entries(plantCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([name, count]) => ({ name, count }));
-
-      // Top problems (diseases/pests) from questions
-      const problemKeywords: Record<string, string> = {
-        "เพลี้ย": "แมลง", "หนอน": "แมลง", "ไร": "แมลง", "แมลง": "แมลง", "ด้วง": "แมลง", "ทริปส์": "แมลง",
-        "ราน้ำค้าง": "โรค", "รากเน่า": "โรค", "ใบไหม้": "โรค", "ใบจุด": "โรค", "แอนแทรคโนส": "โรค", "ราแป้ง": "โรค", "เชื้อรา": "โรค", "ราสนิม": "โรค",
-        "หญ้า": "วัชพืช", "วัชพืช": "วัชพืช",
-        "บำรุง": "บำรุง", "ปุ๋ย": "บำรุง", "ใบอ่อน": "บำรุง", "เร่งดอก": "บำรุง", "ติดผล": "บำรุง",
+      // Top question topics — group by intent from DB (no keyword scan)
+      const intentToType: Record<string, string> = {
+        pest_control: "แมลง",
+        disease_treatment: "โรค",
+        weed_control: "วัชพืช",
+        nutrient_supplement: "บำรุง",
+        product_inquiry: "สินค้า",
+        usage_instruction: "วิธีใช้",
+        product_recommendation: "แนะนำ",
       };
-      const problemCounts: Record<string, { count: number; type: string }> = {};
+
+      // Top questions per intent category (real question_text from DB)
+      const topProblems: Array<{ name: string; count: number; type: string }> = [];
+      const intentQuestions: Record<string, Record<string, number>> = {};
       questions.forEach(e => {
-        const q = e.question_text || "";
-        Object.entries(problemKeywords).forEach(([kw, type]) => {
-          if (q.includes(kw)) {
-            if (!problemCounts[kw]) problemCounts[kw] = { count: 0, type };
-            problemCounts[kw].count++;
+        const type = intentToType[e.intent] || "";
+        if (!type) return;
+        const q = (e.question_text || "").substring(0, 50).trim();
+        if (!q) return;
+        if (!intentQuestions[type]) intentQuestions[type] = {};
+        intentQuestions[type][q] = (intentQuestions[type][q] || 0) + 1;
+      });
+      // Flatten: pick top question per type, then sort by count
+      Object.entries(intentQuestions).forEach(([type, qs]) => {
+        Object.entries(qs)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .forEach(([name, count]) => topProblems.push({ name, count, type }));
+      });
+      topProblems.sort((a, b) => b.count - a.count);
+      const topProblemsSliced = topProblems.slice(0, 10);
+
+      // Top plants — from products3.applicable_crops (DB, not hardcode)
+      const plantsRes = await supabase.from("products3").select("applicable_crops");
+      const allCrops: Record<string, number> = {};
+      (plantsRes.data || []).forEach(r => {
+        const crops = (r.applicable_crops || "").split(/[,，、]/);
+        crops.forEach((c: string) => {
+          const name = c.trim();
+          if (name && name.length > 1 && name.length < 15) {
+            allCrops[name] = (allCrops[name] || 0) + 1;
           }
         });
       });
-      const topProblems = Object.entries(problemCounts)
-        .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 10)
-        .map(([name, { count, type }]) => ({ name, count, type }));
+      const topPlants = Object.entries(allCrops)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, count }));
 
       // Peak hours
       const hourCounts: Record<string, number> = {};
@@ -250,7 +265,7 @@ export default function DashboardPage() {
         dailySeries,
         topRecommendedProducts,
         topPlants,
-        topProblems,
+        topProblems: topProblemsSliced,
         peakHours,
         handoffRate,
         handoffCount,
@@ -472,19 +487,14 @@ export default function DashboardPage() {
 
           {/* Top Plants */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">พืชที่ถามบ่อย</h3>
-            <p className="text-xs text-gray-400 mb-4">พืชที่เกษตรกรสนใจมากที่สุด</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">พืชที่รองรับ</h3>
+            <p className="text-xs text-gray-400 mb-4">จำนวนสินค้าที่ใช้ได้กับแต่ละพืช (จาก DB)</p>
             <div className="space-y-2">
               {(stats?.topPlants || []).map((item, i) => {
-                const plantEmoji: Record<string, string> = {
-                  "ทุเรียน": "🍈", "ข้าว": "🌾", "มะม่วง": "🥭", "ส้ม": "🍊",
-                  "อ้อย": "🎋", "ข้าวโพด": "🌽", "มันสำปะหลัง": "🥔", "ลำไย": "🫐",
-                  "พริก": "🌶️", "ยางพารา": "🌳", "ปาล์ม": "🌴", "ผัก": "🥬",
-                };
                 const maxCount = stats?.topPlants?.[0]?.count || 1;
                 return (
                   <div key={i} className="flex items-center gap-3">
-                    <span className="text-xl flex-shrink-0">{plantEmoji[item.name] || "🌱"}</span>
+                    <span className="w-6 h-6 bg-green-50 text-green-600 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-sm font-medium text-gray-700">{item.name}</span>
@@ -508,8 +518,8 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Top Problems */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">ปัญหาที่ถามบ่อย</h3>
-            <p className="text-xs text-gray-400 mb-4">โรค แมลง วัชพืช ที่เกษตรกรพบบ่อย</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">คำถามยอดนิยมตามหมวด</h3>
+            <p className="text-xs text-gray-400 mb-4">คำถามจริงจาก user แยกตาม intent (จาก DB)</p>
             <div className="space-y-2">
               {(stats?.topProblems || []).map((item, i) => {
                 const typeColor: Record<string, string> = {
