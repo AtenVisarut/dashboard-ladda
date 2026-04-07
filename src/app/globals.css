@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* ICP Ladda CI Colors */
+  --color-primary-50: #E6EEF7;
+  --color-primary-100: #CCE0F0;
+  --color-primary-200: #99C1E1;
+  --color-primary-300: #66A3D1;
+  --color-primary-400: #3384C2;
+  --color-primary-500: #004F9F;
+  --color-primary-600: #003F7F;
+  --color-primary-700: #002F5F;
+  --color-primary-800: #002040;
+  --color-primary-900: #001020;
+
+  --color-secondary: #28A745;
+  --color-secondary-light: #5DD879;
+  --color-secondary-dark: #1E7E34;
+
+  --color-accent: #FFC107;
+  --color-accent-light: #FFD54F;
+  --color-accent-dark: #FFA000;
+
+  --color-success: #28A745;
+  --color-warning: #FFC107;
+  --color-error: #DC3545;
+  --color-info: #17A2B8;
+
+  /* Platform Colors */
+  --color-line: #06C755;
+  --color-facebook: #0084FF;
+
+  /* Font */
+  --font-primary: 'Noto Sans Thai', 'Sarabun', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-primary);
+    color: #1F2937;
+    background-color: #F9FAFB;
+  }
+}
