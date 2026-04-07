@@ -287,300 +287,217 @@ export default function DashboardPage() {
       <Header title="Dashboard" subtitle="ภาพรวมระบบ Chatbot น้องลัดดา" />
 
       <div className="p-6 space-y-6">
-        {/* Period Selector + Health */}
+        {/* ══════════ Controls ══════════ */}
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
             {[1, 7, 30].map((d) => (
-              <button
-                key={d}
-                onClick={() => setDays(d)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
-                  days === d
-                    ? "bg-primary-500 text-white"
-                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
-                }`}
-              >
-                {d === 1 ? "วันนี้" : `${d} วัน`}
-              </button>
+              <button key={d} onClick={() => setDays(d)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition ${days === d ? "bg-primary-500 text-white" : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"}`}
+              >{d === 1 ? "วันนี้" : `${d} วัน`}</button>
             ))}
           </div>
           <div className="flex items-center gap-3">
             <button onClick={fetchStats} disabled={loading} className="p-2 hover:bg-gray-100 rounded-xl transition">
               <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? "animate-spin" : ""}`} />
             </button>
-            <span className="text-sm text-gray-500">สถานะ:</span>
             <HealthBadge status={health} />
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard icon={Users} label="ผู้ใช้งาน" value={stats?.totalUsers ?? "-"} subtext="ทั้งหมด" color="bg-primary-500" />
-          <StatCard icon={MessageSquare} label="คำถาม" value={stats?.totalQuestions ?? "-"} subtext={`${days === 1 ? "วันนี้" : `${days} วัน`}`} color="bg-[#28A745]" />
-          <StatCard icon={Clock} label="ตอบเฉลี่ย" value={stats ? `${(stats.avgResponseTime / 1000).toFixed(1)}s` : "-"} subtext="avg response time" color="bg-[#FFA000]" />
-          <StatCard icon={AlertTriangle} label="Errors" value={stats?.totalErrors ?? "-"} subtext={stats && stats.totalQuestions > 0 ? `${((stats.totalErrors / stats.totalQuestions) * 100).toFixed(1)}%` : ""} color="bg-[#DC3545]" />
-          <StatCard icon={Package} label="สินค้า" value={stats?.totalProducts ?? "-"} subtext="products" color="bg-primary-700" />
-        </div>
-
-        {/* Daily Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Requests / วัน</h3>
-            <div className="h-64">
-              {stats?.dailySeries && stats.dailySeries.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats.dailySeries}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Area type="monotone" dataKey="requests" stroke="#004F9F" fill="#004F9F" fillOpacity={0.1} strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-16">ยังไม่มีข้อมูล</p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Response Time เฉลี่ย (วินาที)</h3>
-            <div className="h-64">
-              {stats?.dailySeries && stats.dailySeries.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.dailySeries}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="avgResponse" fill="#FFA000" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-16">ยังไม่มีข้อมูล</p>
-              )}
-            </div>
+        {/* ══════════ 1. ภาพรวม (Executive Summary) ══════════ */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">ภาพรวม</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StatCard icon={Users} label="ผู้ใช้ทั้งหมด" value={stats?.totalUsers ?? "-"} subtext={`ใหม่ ${stats?.newUsersInPeriod ?? 0} คน`} color="bg-primary-500" />
+            <StatCard icon={MessageSquare} label="คำถาม" value={stats?.totalQuestions ?? "-"} subtext={days === 1 ? "วันนี้" : `${days} วัน`} color="bg-[#28A745]" />
+            <StatCard icon={Clock} label="ตอบเฉลี่ย" value={stats ? `${(stats.avgResponseTime / 1000).toFixed(1)}s` : "-"} subtext="response time" color="bg-[#FFA000]" />
+            <StatCard icon={AlertTriangle} label="ส่งต่อแอดมิน" value={stats?.handoffCount ?? 0} subtext={`${stats?.handoffRate ?? 0}% ของคำถาม`} color="bg-[#DC3545]" />
+            <StatCard icon={Package} label="สินค้า" value={stats?.totalProducts ?? "-"} subtext="ในระบบ" color="bg-primary-700" />
+            <StatCard icon={MessageSquare} label="msg/session" value={stats?.avgMessagesPerSession ?? "-"} subtext="เฉลี่ยต่อ user" color="bg-[#6F42C1]" />
           </div>
         </div>
 
-        {/* Platform Breakdown + System */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">แพลตฟอร์ม</h3>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-[#06C755] rounded-xl flex items-center justify-center">
-                  <Smartphone className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-medium text-gray-700">LINE</span>
-                    <span className="text-sm text-gray-500">{stats?.lineUsers ?? 0} users</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-[#06C755] h-2 rounded-full transition-all" style={{ width: stats ? `${(stats.lineUsers / Math.max(stats.totalUsers, 1)) * 100}%` : "0%" }} />
-                  </div>
-                </div>
+        {/* ══════════ 2. แนวโน้ม (Trends) ══════════ */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">แนวโน้ม</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-4">จำนวนคำถาม / วัน</h3>
+              <div className="h-56">
+                {stats?.dailySeries && stats.dailySeries.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={stats.dailySeries}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="requests" stroke="#004F9F" fill="#004F9F" fillOpacity={0.1} strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (<p className="text-sm text-gray-400 text-center py-16">ยังไม่มีข้อมูล</p>)}
               </div>
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-[#0084FF] rounded-xl flex items-center justify-center">
-                  <Smartphone className="w-5 h-5 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-medium text-gray-700">Facebook</span>
-                    <span className="text-sm text-gray-500">{stats?.fbUsers ?? 0} users</span>
+            </div>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-4">ความเร็วตอบเฉลี่ย (วินาที)</h3>
+              <div className="h-56">
+                {stats?.dailySeries && stats.dailySeries.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.dailySeries}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="avgResponse" fill="#FFA000" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (<p className="text-sm text-gray-400 text-center py-16">ยังไม่มีข้อมูล</p>)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ══════════ 3. ผู้ใช้งาน (Users) ══════════ */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">ผู้ใช้งาน</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Platform */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-4">แพลตฟอร์ม</h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-[#06C755] rounded-xl flex items-center justify-center"><Smartphone className="w-5 h-5 text-white" /></div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1"><span className="text-sm font-medium text-gray-700">LINE</span><span className="text-sm text-gray-500">{stats?.lineUsers ?? 0} คน</span></div>
+                    <div className="w-full bg-gray-100 rounded-full h-2"><div className="bg-[#06C755] h-2 rounded-full transition-all" style={{ width: stats ? `${(stats.lineUsers / Math.max(stats.totalUsers, 1)) * 100}%` : "0%" }} /></div>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div className="bg-[#0084FF] h-2 rounded-full transition-all" style={{ width: stats ? `${(stats.fbUsers / Math.max(stats.totalUsers, 1)) * 100}%` : "0%" }} />
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-[#0084FF] rounded-xl flex items-center justify-center"><Smartphone className="w-5 h-5 text-white" /></div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1"><span className="text-sm font-medium text-gray-700">Facebook</span><span className="text-sm text-gray-500">{stats?.fbUsers ?? 0} คน</span></div>
+                    <div className="w-full bg-gray-100 rounded-full h-2"><div className="bg-[#0084FF] h-2 rounded-full transition-all" style={{ width: stats ? `${(stats.fbUsers / Math.max(stats.totalUsers, 1)) * 100}%` : "0%" }} /></div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* Top Intents */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">หัวข้อที่ถามบ่อย</h3>
-            <div className="space-y-2">
-              {(stats?.topIntents || []).map((item, i) => {
-                const intentLabels: Record<string, { label: string; emoji: string }> = {
-                  product_inquiry: { label: "ถามข้อมูลสินค้า", emoji: "💊" },
-                  product_recommendation: { label: "ขอแนะนำสินค้า", emoji: "🛒" },
-                  disease_treatment: { label: "โรคพืช", emoji: "🦠" },
-                  pest_control: { label: "แมลงศัตรูพืช", emoji: "🐛" },
-                  weed_control: { label: "วัชพืช", emoji: "🌿" },
-                  nutrient_supplement: { label: "บำรุง/ฮอร์โมน", emoji: "🌱" },
-                  usage_instruction: { label: "วิธีใช้/อัตราผสม", emoji: "📋" },
-                  general_agriculture: { label: "เกษตรทั่วไป", emoji: "🌾" },
-                  greeting: { label: "ทักทาย", emoji: "👋" },
-                  unknown: { label: "อื่นๆ", emoji: "❓" },
-                };
-                const mapped = intentLabels[item.intent] || { label: item.intent, emoji: "📌" };
-                return (
-                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 bg-primary-50 text-primary-500 rounded-lg flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                    <span className="text-sm text-gray-700">{mapped.emoji} {mapped.label}</span>
-                  </div>
-                  <span className="text-sm font-medium text-gray-500">{item.count}</span>
-                </div>
-                );
-              })}
-              {(!stats?.topIntents || stats.topIntents.length === 0) && (
-                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
-              )}
+            {/* Peak Hours */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-4">ช่วงเวลาที่ใช้งานบ่อย</h3>
+              <div className="h-48">
+                {stats?.peakHours && stats.peakHours.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.peakHours}>
+                      <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#004F9F" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (<p className="text-sm text-gray-400 text-center py-12">ยังไม่มีข้อมูล</p>)}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Top Questions */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">คำถามยอดนิยม</h3>
-          <div className="space-y-2">
-            {(stats?.topQuestions || []).map((item, i) => (
-              <div key={i} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-gray-50 transition">
-                <div className="flex items-center gap-3">
-                  <span className="w-7 h-7 bg-primary-50 text-primary-500 rounded-lg flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                  <span className="text-sm text-gray-700">{item.question}</span>
-                </div>
-                <span className="text-sm font-medium text-gray-500">{item.count} ครั้ง</span>
-              </div>
-            ))}
-            {(!stats?.topQuestions || stats.topQuestions.length === 0) && (
-              <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
-            )}
-          </div>
-        </div>
-
-        {/* ============ Business Insights ============ */}
-
-        {/* Row: Product Insights + Crop Trends */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Top Recommended Products */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">สินค้าที่แนะนำบ่อย</h3>
-            <p className="text-xs text-gray-400 mb-4">สินค้าที่ bot แนะนำให้เกษตรกรมากที่สุด</p>
-            <div className="space-y-2">
-              {(stats?.topRecommendedProducts || []).map((item, i) => {
-                const maxCount = stats?.topRecommendedProducts?.[0]?.count || 1;
-                return (
-                  <div key={i} className="flex items-center gap-3">
+        {/* ══════════ 4. สินค้า (Products) ══════════ */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">สินค้า</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top Recommended */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-1">สินค้าที่แนะนำบ่อย</h3>
+              <p className="text-xs text-gray-400 mb-4">สินค้าที่ bot แนะนำให้เกษตรกรมากที่สุด</p>
+              <div className="space-y-2">
+                {(stats?.topRecommendedProducts || []).map((item, i) => {
+                  const maxCount = stats?.topRecommendedProducts?.[0]?.count || 1;
+                  return (<div key={i} className="flex items-center gap-3">
                     <span className="w-6 h-6 bg-primary-50 text-primary-600 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm text-gray-700 truncate">{item.name}</span>
-                        <span className="text-xs font-medium text-gray-500 ml-2 flex-shrink-0">{item.count} ครั้ง</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-primary-400 h-1.5 rounded-full transition-all" style={{ width: `${(item.count / maxCount) * 100}%` }} />
-                      </div>
+                      <div className="flex justify-between items-center mb-1"><span className="text-sm text-gray-700 truncate">{item.name}</span><span className="text-xs font-medium text-gray-500 ml-2 flex-shrink-0">{item.count} ครั้ง</span></div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-primary-400 h-1.5 rounded-full transition-all" style={{ width: `${(item.count / maxCount) * 100}%` }} /></div>
                     </div>
-                  </div>
-                );
-              })}
-              {(!stats?.topRecommendedProducts || stats.topRecommendedProducts.length === 0) && (
-                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
-              )}
+                  </div>);
+                })}
+                {(!stats?.topRecommendedProducts || stats.topRecommendedProducts.length === 0) && (<p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>)}
+              </div>
             </div>
-          </div>
-
-          {/* Top Plants */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">พืชที่รองรับ</h3>
-            <p className="text-xs text-gray-400 mb-4">จำนวนสินค้าที่ใช้ได้กับแต่ละพืช (จาก DB)</p>
-            <div className="space-y-2">
-              {(stats?.topPlants || []).map((item, i) => {
-                const maxCount = stats?.topPlants?.[0]?.count || 1;
-                return (
-                  <div key={i} className="flex items-center gap-3">
+            {/* Crop Coverage */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-1">พืชที่รองรับ</h3>
+              <p className="text-xs text-gray-400 mb-4">จำนวนสินค้าที่ใช้ได้กับแต่ละพืช</p>
+              <div className="space-y-2">
+                {(stats?.topPlants || []).map((item, i) => {
+                  const maxCount = stats?.topPlants?.[0]?.count || 1;
+                  return (<div key={i} className="flex items-center gap-3">
                     <span className="w-6 h-6 bg-green-50 text-green-600 rounded-md flex items-center justify-center text-xs font-bold flex-shrink-0">{i + 1}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-medium text-gray-700">{item.name}</span>
-                        <span className="text-xs text-gray-500 ml-2 flex-shrink-0">{item.count} ครั้ง</span>
-                      </div>
-                      <div className="w-full bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-green-400 h-1.5 rounded-full transition-all" style={{ width: `${(item.count / maxCount) * 100}%` }} />
-                      </div>
+                      <div className="flex justify-between items-center mb-1"><span className="text-sm font-medium text-gray-700">{item.name}</span><span className="text-xs text-gray-500 ml-2 flex-shrink-0">{item.count} สินค้า</span></div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5"><div className="bg-green-400 h-1.5 rounded-full transition-all" style={{ width: `${(item.count / maxCount) * 100}%` }} /></div>
                     </div>
-                  </div>
-                );
-              })}
-              {(!stats?.topPlants || stats.topPlants.length === 0) && (
-                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
-              )}
+                  </div>);
+                })}
+                {(!stats?.topPlants || stats.topPlants.length === 0) && (<p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>)}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Row: Problems + Peak Hours */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Top Problems */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">คำถามยอดนิยมตามหมวด</h3>
-            <p className="text-xs text-gray-400 mb-4">คำถามจริงจาก user แยกตาม intent (จาก DB)</p>
-            <div className="space-y-2">
-              {(stats?.topProblems || []).map((item, i) => {
-                const typeColor: Record<string, string> = {
-                  "แมลง": "bg-red-100 text-red-700",
-                  "โรค": "bg-orange-100 text-orange-700",
-                  "วัชพืช": "bg-green-100 text-green-700",
-                  "บำรุง": "bg-blue-100 text-blue-700",
-                };
-                return (
-                  <div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
-                    <div className="flex items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor[item.type] || "bg-gray-100 text-gray-600"}`}>{item.type}</span>
-                      <span className="text-sm text-gray-700">{item.name}</span>
-                    </div>
+        {/* ══════════ 5. คำถาม (Questions & Intents) ══════════ */}
+        <div>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">คำถามจากเกษตรกร</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Intent breakdown */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-4">หัวข้อที่ถามบ่อย</h3>
+              <div className="space-y-2">
+                {(stats?.topIntents || []).map((item, i) => {
+                  const intentLabels: Record<string, { label: string; emoji: string }> = {
+                    product_inquiry: { label: "ถามข้อมูลสินค้า", emoji: "💊" }, product_recommendation: { label: "ขอแนะนำสินค้า", emoji: "🛒" },
+                    disease_treatment: { label: "โรคพืช", emoji: "🦠" }, pest_control: { label: "แมลงศัตรูพืช", emoji: "🐛" },
+                    weed_control: { label: "วัชพืช", emoji: "🌿" }, nutrient_supplement: { label: "บำรุง/ฮอร์โมน", emoji: "🌱" },
+                    usage_instruction: { label: "วิธีใช้/อัตราผสม", emoji: "📋" }, general_agriculture: { label: "เกษตรทั่วไป", emoji: "🌾" },
+                    greeting: { label: "ทักทาย", emoji: "👋" }, unknown: { label: "อื่นๆ", emoji: "❓" },
+                  };
+                  const mapped = intentLabels[item.intent] || { label: item.intent, emoji: "📌" };
+                  return (<div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
+                    <div className="flex items-center gap-3"><span className="w-7 h-7 bg-primary-50 text-primary-500 rounded-lg flex items-center justify-center text-xs font-bold">{i + 1}</span><span className="text-sm text-gray-700">{mapped.emoji} {mapped.label}</span></div>
                     <span className="text-sm font-medium text-gray-500">{item.count}</span>
-                  </div>
-                );
-              })}
-              {(!stats?.topProblems || stats.topProblems.length === 0) && (
-                <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>
-              )}
+                  </div>);
+                })}
+                {(!stats?.topIntents || stats.topIntents.length === 0) && (<p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>)}
+              </div>
+            </div>
+            {/* Top questions by category */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <h3 className="text-base font-semibold text-gray-800 mb-1">คำถามจริงแยกตามหมวด</h3>
+              <p className="text-xs text-gray-400 mb-4">คำถามจริงจาก user จัดกลุ่มตาม intent</p>
+              <div className="space-y-2">
+                {(stats?.topProblems || []).map((item, i) => {
+                  const typeColor: Record<string, string> = { "แมลง": "bg-red-100 text-red-700", "โรค": "bg-orange-100 text-orange-700", "วัชพืช": "bg-green-100 text-green-700", "บำรุง": "bg-blue-100 text-blue-700", "สินค้า": "bg-purple-100 text-purple-700", "วิธีใช้": "bg-yellow-100 text-yellow-700", "แนะนำ": "bg-pink-100 text-pink-700" };
+                  return (<div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
+                    <div className="flex items-center gap-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor[item.type] || "bg-gray-100 text-gray-600"}`}>{item.type}</span><span className="text-sm text-gray-700 truncate">{item.name}</span></div>
+                    <span className="text-sm font-medium text-gray-500 flex-shrink-0">{item.count}</span>
+                  </div>);
+                })}
+                {(!stats?.topProblems || stats.topProblems.length === 0) && (<p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>)}
+              </div>
             </div>
           </div>
-
-          {/* Peak Hours + Engagement Stats */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">ช่วงเวลาที่ใช้งาน</h3>
-            <p className="text-xs text-gray-400 mb-4">จำนวนคำถามแยกตามชั่วโมง</p>
-            <div className="h-40 mb-4">
-              {stats?.peakHours && stats.peakHours.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.peakHours}>
-                    <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#004F9F" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-12">ยังไม่มีข้อมูล</p>
-              )}
-            </div>
-            {/* Engagement summary */}
-            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800">{stats?.newUsersInPeriod ?? "-"}</p>
-                <p className="text-xs text-gray-400">user ใหม่</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800">{stats?.avgMessagesPerSession ?? "-"}</p>
-                <p className="text-xs text-gray-400">msg/session</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-800">{stats?.handoffRate ?? 0}%</p>
-                <p className="text-xs text-gray-400">handoff rate</p>
-              </div>
+          {/* Top Questions full-width */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mt-4">
+            <h3 className="text-base font-semibold text-gray-800 mb-4">คำถามยอดนิยม</h3>
+            <div className="space-y-2">
+              {(stats?.topQuestions || []).map((item, i) => (
+                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-xl hover:bg-gray-50 transition">
+                  <div className="flex items-center gap-3"><span className="w-7 h-7 bg-primary-50 text-primary-500 rounded-lg flex items-center justify-center text-xs font-bold">{i + 1}</span><span className="text-sm text-gray-700">{item.question}</span></div>
+                  <span className="text-sm font-medium text-gray-500">{item.count} ครั้ง</span>
+                </div>))}
+              {(!stats?.topQuestions || stats.topQuestions.length === 0) && (<p className="text-sm text-gray-400 text-center py-4">ยังไม่มีข้อมูล</p>)}
             </div>
           </div>
         </div>
 
-        {/* Recent Events */}
+        {/* ══════════ 6. Events ล่าสุด ══════════ */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Events ล่าสุด</h3>
           <div className="overflow-x-auto">
