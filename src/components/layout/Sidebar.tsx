@@ -8,6 +8,7 @@ import {
   Bell,
   Users,
   Package,
+  FileText,
   LogOut,
   Leaf,
   ChevronLeft,
@@ -18,6 +19,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/chat", label: "แชท", icon: MessageSquare, badge: true },
   { href: "/alerts", label: "การแจ้งเตือน", icon: Bell },
+  { href: "/templates", label: "เทมเพลตคำตอบ", icon: FileText },
   { href: "/users", label: "ผู้ใช้งาน", icon: Users },
   { href: "/products", label: "สินค้า", icon: Package },
 ];

@@ -2,7 +2,7 @@
 
 import Header from "@/components/layout/Header";
 import { supabase } from "@/lib/supabase";
-import { Search, Send, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Search, Send, CheckCircle, AlertCircle, RefreshCw, FileText, X } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Conversation {
@@ -22,10 +22,108 @@ interface Message {
   metadata?: Record<string, unknown>;
 }
 
+interface Template {
+  id: number;
+  title: string;
+  category: string;
+  content: string;
+  placeholders: string[];
+  usage_count: number;
+}
+
+function TemplatePicker({
+  onSelect, onClose,
+}: { onSelect: (tpl: Template) => void; onClose: () => void }) {
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("admin_templates")
+        .select("*")
+        .order("usage_count", { ascending: false })
+        .limit(100);
+      setTemplates(data || []);
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = templates.filter((t) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.title.toLowerCase().includes(q) ||
+      t.content.toLowerCase().includes(q) ||
+      t.category.toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-800">เลือก template</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-gray-100">
+          <div className="flex items-center bg-gray-100 rounded-xl px-3 py-2 gap-2">
+            <Search className="w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ค้นหา template..."
+              className="bg-transparent outline-none text-sm flex-1"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="overflow-auto flex-1 p-3 space-y-2">
+          {loading && <p className="text-center text-sm text-gray-400 py-8">กำลังโหลด...</p>}
+          {!loading && filtered.length === 0 && (
+            <p className="text-center text-sm text-gray-400 py-8">ไม่พบ template</p>
+          )}
+          {filtered.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t)}
+              className="w-full text-left p-3 rounded-xl border border-gray-200 hover:border-primary-400 hover:bg-primary-50 transition"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-medium text-sm text-gray-800">{t.title}</span>
+                <span className="text-[10px] text-gray-400">
+                  {t.category} · ใช้ {t.usage_count} ครั้ง
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 line-clamp-2 whitespace-pre-wrap">{t.content}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function applyPlaceholders(content: string, values: Record<string, string>): string {
+  return content.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (m, key) => {
+    const v = values[key];
+    return v !== undefined ? v : m;
+  });
+}
+
 function ChatInput({ userId, onSent }: { userId: string; onSent: () => void }) {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string>("");
+  const [showPicker, setShowPicker] = useState(false);
+  const [pendingTpl, setPendingTpl] = useState<Template | null>(null);
+  const [placeholderValues, setPlaceholderValues] = useState<Record<string, string>>({});
 
   const handleSend = async () => {
     if (!message.trim() || sending) return;
@@ -40,6 +138,13 @@ function ChatInput({ userId, onSent }: { userId: string; onSent: () => void }) {
         body: JSON.stringify({ message: message.trim() }),
       });
       if (res.ok) {
+        // Track template usage if one was picked
+        if (pendingTpl) {
+          fetch(`${API_BASE}/api/admin/templates/${pendingTpl.id}/use`, {
+            method: "POST", credentials: "include",
+          }).catch(() => {});
+          setPendingTpl(null);
+        }
         setMessage("");
         setStatus("sent");
         onSent();
@@ -54,16 +159,87 @@ function ChatInput({ userId, onSent }: { userId: string; onSent: () => void }) {
     }
   };
 
+  const selectTemplate = (tpl: Template) => {
+    setShowPicker(false);
+    setPendingTpl(tpl);
+    if (tpl.placeholders && tpl.placeholders.length > 0) {
+      // Initialize empty values — user will fill
+      const init: Record<string, string> = {};
+      tpl.placeholders.forEach((p) => { init[p] = ""; });
+      setPlaceholderValues(init);
+      setMessage(tpl.content);
+    } else {
+      setMessage(tpl.content);
+      setPlaceholderValues({});
+    }
+  };
+
+  const applyAndInsert = () => {
+    if (!pendingTpl) return;
+    const filled = applyPlaceholders(pendingTpl.content, placeholderValues);
+    setMessage(filled);
+  };
+
+  const hasPlaceholders = pendingTpl && pendingTpl.placeholders && pendingTpl.placeholders.length > 0;
+
   return (
     <div className="bg-white border-t border-gray-200 p-3">
-      <div className="flex items-center gap-2">
-        <input
-          type="text"
+      {/* Placeholder filler — shown after a template is picked */}
+      {hasPlaceholders && pendingTpl && (
+        <div className="mb-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-blue-700">
+              กำลังใช้ template: {pendingTpl.title}
+            </span>
+            <button
+              onClick={() => { setPendingTpl(null); setPlaceholderValues({}); }}
+              className="text-xs text-blue-500 hover:underline"
+            >
+              ล้าง
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            {pendingTpl.placeholders.map((p) => (
+              <input
+                key={p}
+                type="text"
+                value={placeholderValues[p] || ""}
+                onChange={(e) => setPlaceholderValues({ ...placeholderValues, [p]: e.target.value })}
+                placeholder={`{${p}}`}
+                className="px-2 py-1.5 bg-white border border-blue-200 rounded-lg outline-none text-xs focus:border-blue-400"
+              />
+            ))}
+          </div>
+          <button
+            onClick={applyAndInsert}
+            className="text-xs px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition"
+          >
+            แทนค่าใน template
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-end gap-2">
+        <button
+          onClick={() => setShowPicker(true)}
+          disabled={sending}
+          className="p-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition disabled:opacity-50"
+          title="เลือก template"
+        >
+          <FileText className="w-5 h-5" />
+        </button>
+        <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="พิมพ์ข้อความตอบกลับ..."
-          className="flex-1 px-4 py-2.5 bg-gray-100 rounded-xl outline-none text-sm focus:ring-2 focus:ring-primary-500 transition"
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          placeholder="พิมพ์ข้อความตอบกลับ... (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)"
+          className="flex-1 px-4 py-2.5 bg-gray-100 rounded-xl outline-none text-sm focus:ring-2 focus:ring-primary-500 transition resize-none min-h-[44px] max-h-40"
+          rows={message.split("\n").length > 1 ? Math.min(message.split("\n").length, 5) : 1}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
           disabled={sending}
         />
         <button
@@ -80,6 +256,13 @@ function ChatInput({ userId, onSent }: { userId: string; onSent: () => void }) {
       </div>
       {status === "sent" && <p className="text-[10px] text-green-500 mt-1 px-1">ส่งสำเร็จ</p>}
       {status === "error" && <p className="text-[10px] text-red-500 mt-1 px-1">ส่งไม่สำเร็จ — ตรวจสอบ backend</p>}
+
+      {showPicker && (
+        <TemplatePicker
+          onSelect={selectTemplate}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
     </div>
   );
 }
